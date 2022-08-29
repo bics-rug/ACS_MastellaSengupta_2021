@@ -10,12 +10,173 @@ Current_PATH = os.getcwd()
 FILE_PATH = os.path.dirname(os.getcwd())
 CODE_PATH = os.path.join(FILE_PATH, 'Code')
 
-sys.path.append(os.path.join(CODE_PATH, 'utils'))
-from utils_plot import *
-from utils_spikes import *
-from utils_misc import *
+# sys.path.append(os.path.join(CODE_PATH, 'utils'))
+# from utils_plot import *
+# from utils_spikes import *
+# from utils_misc import *
 
+def rate_calculator(stimulus_array, Spikes, nNeurons_layer2, orientation_adimension=True, method='Spike_Count',
+                    Engine='Brian2'):
+    '''
+    A calculator of the average spiking rate of the different neurons of the given layer, at each stimulus presentation.
+    :param stimulus_array: a list of the different input fed to the network in the form
+        [[time_input0,value_input0],[time_input1,value_input1], ...]
+    :param Spikes: the spiking monitor of the layer you want to analyze
+    :param nNeurons_layer2: the number of neurons in that layer
+    :param orientation_adimension: a variable to declare if the time_input is adimensional or not
+    :param method: the method used to obtain the rate:
+        - Spike_Count: Simply counts the number of spikes occured during the time of each stimulus
+                    (useful for rate coding)
+        - Instantaneous_avg: Computes all the instantaneous rate of the spikes and then average them along the stimulus
+                    (useful for temporal coding)
+    :return: a 2D NDarray made by neuron x rate_stimulus
+    '''
 
+    if get_dimensions(stimulus_array[0][0]).is_dimensionless:
+        orientation_time = [stimulus_array[i][0] for i in range(0, len(stimulus_array))]
+    else:
+        orientation_time = [stimulus_array[i][0] / second for i in range(0, len(stimulus_array))]
+    low_boundary = 0 * second
+    rate = np.zeros([nNeurons_layer2, len(orientation_time)])
+    counter = 0
+    rate = np.zeros([nNeurons_layer2, len(orientation_time)])
+    counter = 0
+
+    if get_dimensions(stimulus_array[0][0]).is_dimensionless:
+        orientation_time = [stimulus_array[i][0] for i in range(0, len(stimulus_array))]
+    else:
+        orientation_time = [stimulus_array[i][0] / second for i in range(0, len(stimulus_array))]
+
+    rate = np.zeros([nNeurons_layer2, len(orientation_time)])
+    counter = 0
+
+    if Engine == 'Brian2':
+        low_boundary = 0 * second
+        for timestamp in orientation_time:
+            if orientation_adimension == True:
+                high_boundary = timestamp * second
+            else:
+                high_boundary = timestamp
+            time_indexes = np.where((Spikes.t > low_boundary) & (Spikes.t < high_boundary))
+            if len(time_indexes[0]) > 0:
+                if method == 'Spike_Count':
+                    for element in time_indexes[0]:
+                        neuron_index = int(Spikes.it[0][element])
+                        rate[(neuron_index), counter] += 1
+                elif method == 'Instantaneous_avg':
+                    time_here = Spikes.t[time_indexes[0]]
+                    neurons_here = Spikes.i[time_indexes[0]]
+                    for neuron_index in range(nNeurons_layer2):
+                        where_neuron = np.where(neurons_here == neuron_index)
+
+                        if len(where_neuron[0]) > 0:
+
+                            time_neuron = time_here[where_neuron[0]]
+                            prev = time_neuron[0]
+                            my_diff = 0
+                            for time in time_neuron:
+                                my_diff += time - prev
+                                prev = time
+                            if my_diff != 0:
+                                rate[neuron_index, counter] = time_neuron.size / my_diff
+                        else:
+                            rate[neuron_index, counter] = 0
+                elif method == 'Normalized_Spike_Count':
+                    for element in time_indexes[0]:
+                        neuron_index = int(Spikes.it[0][element])
+                        rate[(neuron_index), counter] += 1
+
+                    rate[:, counter] = rate[:, counter] / (high_boundary - low_boundary)
+
+                else:
+                    print('Method not recognised, please choose between Spike_Count and Instantaneous_avg')
+            else:
+                rate[:, counter] = 0
+            counter += 1
+            low_boundary = high_boundary
+    elif Engine == 'TouchSim':
+        low_boundary = 0
+        for timestamp in orientation_time:
+            if orientation_adimension == True:
+                high_boundary = timestamp
+            else:
+                high_boundary = timestamp
+            time_indexes = np.where((Spikes.spikes[0] > low_boundary) & (Spikes.spikes[0] < high_boundary))
+            if len(time_indexes[0]) > 0:
+                if method == 'Spike_Count':
+                    for element in time_indexes[0]:
+                        # neuron_index = int(Spikes.it[0][element])
+                        neuron_index = 0
+                        rate[(neuron_index), counter] += 1
+                elif method == 'Instantaneous_avg':
+                    time_here = Spikes.spikes[0][time_indexes[0]]
+                    # neurons_here = Spikes.i[time_indexes[0]]
+                    neurons_here = 0
+                    for neuron_index in range(nNeurons_layer2):
+                        where_neuron = np.where(neurons_here == neuron_index)
+                        if len(where_neuron[0]) > 0:
+                            time_neuron = time_here[where_neuron[0]]
+                            prev = time_neuron[0]
+                            my_diff = 0
+                            for time in time_neuron:
+                                my_diff += time - prev
+                                prev = time
+                            if my_diff != 0:
+                                rate[neuron_index, counter] = time_neuron.size / my_diff
+                        else:
+                            rate[neuron_index, counter] = 0
+                elif method == 'Normalized_Spike_Count':
+                    for element in time_indexes[0]:
+                        # neuron_index = int(Spikes.it[0][element])
+                        neuron_index = 0
+                        rate[(neuron_index), counter] += 1
+                    rate[:, counter] = rate[:, counter] / (high_boundary - low_boundary)
+
+                    rate[:, counter] = rate[:, counter] / (high_boundary - low_boundary)
+
+                else:
+                    print('Method not recognised, please choose between Spike_Count and Instantaneous_avg')
+            else:
+                rate[:, counter] = 0
+            counter += 1
+            low_boundary = high_boundary
+    elif Engine == 'TouchSim':
+        low_boundary = 0
+        for j, timestamp in enumerate(orientation_time):
+            if orientation_adimension == True:
+                high_boundary = timestamp
+            else:
+                high_boundary = timestamp
+            for neuron in range(nNeurons_layer2):
+                time_indexes = np.where(
+                    (Spikes.spikes[neuron] >= low_boundary) & (Spikes.spikes[neuron] < high_boundary))
+                if len(time_indexes[0]) > 0:
+                    if method == 'Spike_Count':
+                        rate[neuron, j] = len(time_indexes)
+                    elif method == 'Instantaneous_avg':
+                        time_here = Spikes.spikes[neuron][time_indexes[0]]
+                        # neurons_here = Spikes.i[time_indexes[0]]
+                        time_neuron = 0
+                        prev = time_neuron[0]
+                        my_diff = 0
+                        for time in time_neuron:
+                            my_diff += time - prev
+                            prev = time
+                            if my_diff != 0:
+                                rate[neuron, j] = time_neuron.size / my_diff
+                        else:
+                            rate[neuron_index, j] = 0
+                    elif method == 'Normalized_Spike_Count':
+                        for element in time_indexes[0]:
+                            # neuron_index = int(Spikes.it[0][element])
+                            neuron_index = 0
+                            rate[(neuron_index), j] += 1
+                        rate[:, j] = rate[:, counter] / (high_boundary - low_boundary)
+
+                    else:
+                        print('Method not recognised, please choose between Spike_Count and Instantaneous_avg')
+            low_boundary = high_boundary
+    return rate
 def plot_freqstimulus_vs_freqdevice(collection_of_ffts, intervals, stimuli):
     yticks = [i for i in range(collection_of_ffts.shape[0])]
     xticks = [i for i in range(collection_of_ffts.shape[1])]
@@ -661,9 +822,9 @@ def set_pub():
 
 rc = set_pub()
 # plot_gestures()
-plot_tapping()
+# plot_tapping()
 # plot_wrist()
-# plot_numbers()
+plot_numbers()
 show()
 
 print('wee')
